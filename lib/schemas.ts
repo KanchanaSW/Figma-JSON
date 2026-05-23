@@ -13,15 +13,24 @@ export const ocrResultSchema = z.object({
   textBlocks: z.array(textBlockSchema),
 });
 
-const cardItemSchema = z.object({
-  title: z.string(),
-  value: z.string().optional(),
-  description: z.string().optional(),
+const cardIconSchema = z.object({
+  icon_url: z.string(),
+  text: z.string().optional(),
 });
 
 const buttonItemSchema = z.object({
   label: z.string(),
   variant: z.enum(["primary", "secondary"]).optional(),
+  background_color: z.string().optional(),
+  text_color: z.string().optional(),
+});
+
+const cardItemSchema = z.object({
+  title: z.string(),
+  value: z.string().optional(),
+  description: z.string().optional(),
+  icons: z.array(cardIconSchema).optional(),
+  button: buttonItemSchema.optional(),
 });
 
 const formFieldSchema = z.object({
@@ -37,6 +46,7 @@ export const uiSectionSchema = z.discriminatedUnion("type", [
     type: z.literal("hero"),
     title: z.string(),
     subtitle: z.string().optional(),
+    image_url: z.string().optional(),
   }),
   z.object({
     type: z.literal("card_grid"),

@@ -1,12 +1,21 @@
+export type CardIcon = {
+  icon_url: string;
+  text?: string;
+};
+
 export type CardItem = {
   title: string;
   value?: string;
   description?: string;
+  icons?: CardIcon[];
+  button?: ButtonItem;
 };
 
 export type ButtonItem = {
   label: string;
   variant?: "primary" | "secondary";
+  background_color?: string;
+  text_color?: string;
 };
 
 export type FormField = {
@@ -18,7 +27,7 @@ export type FormField = {
 export type UiSection =
   | { type: "navbar"; items: string[] }
   | { type: "sidebar"; items: string[] }
-  | { type: "hero"; title: string; subtitle?: string }
+  | { type: "hero"; title: string; subtitle?: string; image_url?: string }
   | {
       type: "card_grid";
       columns: number;

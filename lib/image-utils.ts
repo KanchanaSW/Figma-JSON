@@ -1,4 +1,4 @@
-export const MAX_IMAGE_WIDTH = 1920;
+export const MAX_IMAGE_WIDTH = 1280;
 
 export function resizeImageFile(
   file: File,

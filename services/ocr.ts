@@ -3,6 +3,25 @@ import { createWorker } from "tesseract.js";
 import type { OcrResult, TextBlock } from "@/types/ocr";
 
 const MIN_CONFIDENCE = 30;
+const OCR_TIMEOUT_MS = 25_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error("OCR timed out")),
+      ms
+    );
+    promise
+      .then((value) => {
+        clearTimeout(timer);
+        resolve(value);
+      })
+      .catch((error: unknown) => {
+        clearTimeout(timer);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+  });
+}
 
 function bboxToBlock(
   text: string,
@@ -77,7 +96,7 @@ export async function runOcrSafe(imageBuffer: Buffer): Promise<{
   failed: boolean;
 }> {
   try {
-    const result = await runOcr(imageBuffer);
+    const result = await withTimeout(runOcr(imageBuffer), OCR_TIMEOUT_MS);
     return { result, failed: false };
   } catch {
     return { result: { textBlocks: [] }, failed: true };

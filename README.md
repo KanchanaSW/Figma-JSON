@@ -71,12 +71,21 @@ If OCR fails, the API continues with vision-only analysis and shows a warning to
     "theme": "dark",
     "sections": [
       { "type": "navbar", "items": ["Home", "Analytics", "Settings"] },
-      { "type": "hero", "title": "Welcome Back", "subtitle": "Manage your dashboard" },
+      {
+        "type": "hero",
+        "title": "Welcome Back",
+        "subtitle": "Manage your dashboard",
+        "image_url": ""
+      },
       {
         "type": "card_grid",
         "columns": 3,
         "cards": [
-          { "title": "Revenue", "value": "$12,000" },
+          {
+            "title": "Revenue",
+            "value": "$12,000",
+            "icons": [{ "icon_url": "", "text": "vs last month" }]
+          },
           { "title": "Users", "value": "1,240" }
         ]
       }
@@ -148,6 +157,7 @@ OCR depends on Tesseract WASM files bundled into serverless functions. That is c
 | Issue | What to try |
 |-------|-------------|
 | `GROQ_API_KEY is not configured` | Add the key to `.env.local` and restart `npm run dev` |
+| `502` after ~60s | Pipeline exceeded route limit; use a smaller image or retry (uploads are resized to 1280px wide) |
 | Slow first request | Tesseract worker cold start; wait for OCR step to finish |
 | OCR warning toast | Vision-only fallback ran; result may still be useful |
 | Netlify `ENOENT` for `.wasm` | Confirm `netlify.toml` `included_files` paths and redeploy |

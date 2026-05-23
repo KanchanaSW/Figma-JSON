@@ -4,7 +4,7 @@ import { parseUiFromScreenshot } from "@/services/groq-parser";
 import { runOcrSafe } from "@/services/ocr";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 export async function POST(request: Request) {
   try {
@@ -55,9 +55,23 @@ export async function POST(request: Request) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "AI processing failed";
-      const status = message.includes("GROQ_API_KEY") ? 500 : 502;
+      const timedOut =
+        message.includes("timed out") || message.includes("Timeout");
+      const status = message.includes("GROQ_API_KEY")
+        ? 500
+        : timedOut
+          ? 504
+          : 502;
       return NextResponse.json(
-        { error: message, step: "ai", retryable: true, ocr, ocrFailed },
+        {
+          error: timedOut
+            ? "AI request timed out. Try a smaller screenshot or retry."
+            : message,
+          step: "ai",
+          retryable: true,
+          ocr,
+          ocrFailed,
+        },
         { status }
       );
     }
