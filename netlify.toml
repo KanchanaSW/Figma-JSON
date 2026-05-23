@@ -1,0 +1,16 @@
+[build]
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+[functions]
+  included_files = [
+    "node_modules/tesseract.js-core/**/*.wasm",
+    "node_modules/tesseract.js-core/**/*.js",
+    "node_modules/tesseract.js/src/worker-script/**"
+  ]
+  node_bundler = "esbuild"
+
+[functions."___netlify-handler"]
+  timeout = 26
