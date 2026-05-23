@@ -4,10 +4,10 @@ A minimal developer tool that turns UI screenshots into structured JSON. Upload 
 
 ## Features
 
-- **Drag-and-drop upload** — PNG, JPG, WebP (max 10MB), with client-side resize to 1920px width
-- **OCR** — [Tesseract.js](https://github.com/naptha/tesseract.js) extracts text and bounding boxes
-- **AI layout parsing** — [Groq](https://console.groq.com/) vision (`meta-llama/llama-4-scout-17b-16e-instruct`) infers sections, hierarchy, and components
-- **Live preview** — Renders navbar, sidebar, hero, cards, lists, buttons, and forms from JSON
+- **Drag-and-drop upload** — PNG, JPG, WebP (max 10MB), with client-side resize to 1280px width
+- **OCR** — [Tesseract.js](https://github.com/naptha/tesseract.js) extracts text and bounding boxes (25s server timeout; falls back to vision-only)
+- **AI layout parsing** — [Groq](https://console.groq.com/) vision (`meta-llama/llama-4-scout-17b-16e-instruct`) infers sections, hierarchy, assets placeholders, and button colors
+- **Live preview** — Renders navbar, sidebar, hero (with image slot), cards (icons + in-card CTAs), lists, buttons, and forms from JSON
 - **JSON panel** — Syntax highlighting, collapsible tree, copy, and download
 - **History** — Last 20 generations stored in `localStorage` (no backend)
 
@@ -39,54 +39,114 @@ Open [http://localhost:3000](http://localhost:3000), go to **Generate**, upload 
 
 ## Scripts
 
-| Command        | Description              |
-|----------------|--------------------------|
-| `npm run dev`  | Start development server |
-| `npm run build`| Production build         |
-| `npm run start`| Serve production build   |
-| `npm run lint` | Run ESLint               |
+| Command         | Description              |
+|-----------------|--------------------------|
+| `npm run dev`   | Start development server |
+| `npm run build` | Production build       |
+| `npm run start` | Serve production build   |
+| `npm run lint`  | Run ESLint               |
 
 ## How it works
 
 ```text
-Screenshot upload
+Screenshot upload (resized client-side)
        ↓
-POST /api/generate
+POST /api/generate  (max 120s)
        ↓
 Tesseract.js OCR  →  textBlocks[{ text, x, y, width, height }]
-       ↓
+       ↓  (timeout or failure → empty OCR, vision-only)
 Groq vision + OCR context  →  structured UiPage JSON
+       ↓
+Zod validation + normalize (empty asset URLs, default colors)
        ↓
 Preview renderer + JSON viewer (+ history saved locally)
 ```
 
-If OCR fails, the API continues with vision-only analysis and shows a warning toast.
+If OCR fails or times out, the API continues with vision-only analysis and shows a warning toast.
 
 ## JSON output shape
+
+Top-level shape:
 
 ```json
 {
   "page": {
-    "type": "dashboard",
-    "theme": "dark",
+    "type": "dashboard | landing | form | other",
+    "theme": "dark | light",
+    "sections": [ /* see section types below */ ]
+  }
+}
+```
+
+### Section types
+
+| `type`       | Purpose |
+|--------------|---------|
+| `navbar`     | Top navigation labels |
+| `sidebar`    | Side navigation labels |
+| `hero`       | Banner area + headline |
+| `card_grid`  | One or more content cards |
+| `list`       | Bulleted or stacked text rows |
+| `buttons`    | Standalone button row (when CTAs are not inside cards) |
+| `form`       | Input fields |
+
+### Asset placeholders
+
+Screenshots do not yield real CDN URLs. The model emits **empty strings** for assets you fill in later:
+
+| Field           | Where        | Description |
+|-----------------|--------------|-------------|
+| `image_url`     | `hero`       | Hero / banner image |
+| `icon_url`      | `card.icons[]` | Small icon beside feature text |
+| `background_color` | `button`, `card.button` | Hex fill (e.g. `#009639`) or `""` |
+| `text_color`    | `button`, `card.button` | Hex label color (e.g. `#FFFFFF`) or `""` |
+
+### Example (mobile landing)
+
+```json
+{
+  "page": {
+    "type": "landing",
+    "theme": "light",
     "sections": [
-      { "type": "navbar", "items": ["Home", "Analytics", "Settings"] },
       {
         "type": "hero",
-        "title": "Welcome Back",
-        "subtitle": "Manage your dashboard",
+        "title": "Welcome to eSIM",
+        "subtitle": "With the Smart eSIM, you never have to worry about losing or breaking your SIM card!",
         "image_url": ""
       },
       {
         "type": "card_grid",
-        "columns": 3,
+        "columns": 1,
         "cards": [
           {
-            "title": "Revenue",
-            "value": "$12,000",
-            "icons": [{ "icon_url": "", "text": "vs last month" }]
+            "title": "Buy New eSIM",
+            "value": "Check available numbers, buy your favorite one online and activate it on an eSIM.",
+            "icons": [
+              { "icon_url": "", "text": "Starts from 8 USD" },
+              { "icon_url": "", "text": "Only takes 5 minutes" }
+            ],
+            "button": {
+              "label": "Buy now",
+              "variant": "primary",
+              "background_color": "#009639",
+              "text_color": "#FFFFFF"
+            }
           },
-          { "title": "Users", "value": "1,240" }
+          {
+            "title": "My eSIM QR Code",
+            "value": "View your eSIM QR code and easily set up your eSIM on your device.",
+            "icons": [
+              { "icon_url": "", "text": "Activate your eSIM for free" },
+              { "icon_url": "", "text": "Instant eSIM activation" }
+            ],
+            "button": {
+              "label": "View eSIM QR code",
+              "variant": "primary",
+              "background_color": "#009639",
+              "text_color": "#FFFFFF"
+            }
+          }
         ]
       }
     ]
@@ -94,15 +154,31 @@ If OCR fails, the API continues with vision-only analysis and shows a warning to
 }
 ```
 
-Supported section types: `navbar`, `sidebar`, `hero`, `card_grid`, `list`, `buttons`, `form`.
+When a CTA sits **inside** a card, use `card.button`. Use a separate `buttons` section only for standalone button rows:
+
+```json
+{
+  "type": "buttons",
+  "items": [
+    {
+      "label": "Get started",
+      "variant": "primary",
+      "background_color": "",
+      "text_color": ""
+    }
+  ]
+}
+```
+
+Schema definitions live in `lib/schemas.ts` and `types/ui-schema.ts`. Post-parse normalization is in `lib/normalize-ui.ts`.
 
 ## Pages
 
-| Route       | Description                                      |
-|-------------|--------------------------------------------------|
-| `/`         | Landing page with feature overview               |
-| `/generate` | Upload, pipeline status, preview + JSON output   |
-| `/history`  | Browse, reload, or delete past generations       |
+| Route       | Description                                    |
+|-------------|------------------------------------------------|
+| `/`         | Landing page with feature overview             |
+| `/generate` | Upload, pipeline status, preview + JSON output |
+| `/history`  | Browse, reload, or delete past generations     |
 
 ## Tech stack
 
@@ -117,7 +193,7 @@ Supported section types: `navbar`, `sidebar`, `hero`, `card_grid`, `list`, `butt
 
 ```text
 app/
-  api/generate/route.ts   # OCR + Groq pipeline
+  api/generate/route.ts   # OCR + Groq pipeline (maxDuration 120s)
   generate/page.tsx       # Main tool
   history/page.tsx
   page.tsx                # Landing
@@ -127,10 +203,14 @@ components/
   json/                   # Viewer (raw + tree)
   history/
 services/
-  ocr.ts                  # Tesseract worker
-  groq-parser.ts          # Vision + Zod validation
+  ocr.ts                  # Tesseract worker (25s timeout)
+  groq-parser.ts          # Vision + Zod + normalize
 store/app-store.ts        # Zustand state
-lib/                      # Schemas, history, image utils
+lib/
+  schemas.ts              # Zod validation
+  normalize-ui.ts         # Default "" for asset URLs and colors
+  history.ts
+  image-utils.ts          # Client resize (1280px max width)
 types/                    # OCR + UI schema types
 ```
 
@@ -144,22 +224,24 @@ types/                    # OCR + UI schema types
 
 OCR depends on Tesseract WASM files bundled into serverless functions. That is configured in `netlify.toml` and `next.config.ts` (`serverExternalPackages`, `outputFileTracingIncludes`).
 
-**Note:** OCR + AI can take 15–30+ seconds on cold start. Netlify function timeout is set to 26s in `netlify.toml`; longer runs may need a paid plan or local use.
+**Note:** OCR + AI can take 15–60+ seconds on cold start. The API route allows up to **120s** locally; Netlify function timeout is **26s** in `netlify.toml`, so production runs may time out unless you raise limits on a paid plan or run the tool locally.
 
 ## Environment variables
 
-| Variable       | Required | Description        |
-|----------------|----------|--------------------|
-| `GROQ_API_KEY` | Yes      | Groq API secret key |
+| Variable       | Required | Description           |
+|----------------|----------|-----------------------|
+| `GROQ_API_KEY` | Yes      | Groq API secret key   |
 
 ## Troubleshooting
 
 | Issue | What to try |
 |-------|-------------|
 | `GROQ_API_KEY is not configured` | Add the key to `.env.local` and restart `npm run dev` |
-| `502` after ~60s | Pipeline exceeded route limit; use a smaller image or retry (uploads are resized to 1280px wide) |
+| `502` / slow failure after ~60–120s | Use a smaller screenshot or retry; pipeline is capped at 120s (OCR 25s + Groq 45s per call) |
+| `504` / AI timed out | Groq request exceeded 45s; retry or use a smaller image |
 | Slow first request | Tesseract worker cold start; wait for OCR step to finish |
 | OCR warning toast | Vision-only fallback ran; result may still be useful |
+| Missing `image_url` / `icons` in JSON | Re-generate after pulling latest; older history items use the previous shape |
 | Netlify `ENOENT` for `.wasm` | Confirm `netlify.toml` `included_files` paths and redeploy |
 | Invalid file upload | Use PNG, JPG, or WebP under 10MB |
 
